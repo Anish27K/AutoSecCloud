@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.env
+.env.*
+!.env.example
+
+# Databases and runtime logs
+*.db
+*.sqlite
+*.sqlite3
+logs/
+*.log
+
+# Model backups
+ml_engine/*.backup.pkl
+
+# Generated analysis
+graphify-out/
+
+# Editor and OS files
+.DS_Store
+.vscode/
+.idea/
+
+# Test caches
+.pytest_cache/
+.mypy_cache/

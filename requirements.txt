@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+streamlit
+pandas
+numpy
+scikit-learn
+joblib
+SQLAlchemy
+pydantic
+python-multipart
+passlib
+bcrypt
+python-jose
+python-dotenv
+python-json-logger
