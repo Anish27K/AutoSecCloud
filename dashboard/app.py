@@ -1,293 +1,518 @@
-import streamlit as st
-import pandas as pd
-import json
-import time
-from pathlib import Path
+import os
 
-# =========================
+import pandas as pd
+import requests
+import streamlit as st
+
+# ==========================================
 # PAGE CONFIG
-# =========================
+# ==========================================
 
 st.set_page_config(
     page_title="AutoSecCloud Dashboard",
-    layout="wide"
+    page_icon="🛡️",
+    layout="wide",
 )
 
-# =========================
+API_BASE_URL = os.getenv(
+    "AUTOSECCLOUD_API_URL",
+    "https://autoseccloud-api.onrender.com",
+).rstrip("/")
+
+REQUEST_TIMEOUT = 30
+
+
+# ==========================================
+# API HELPERS
+# ==========================================
+
+def api_login(username, password):
+    """Authenticate with the deployed AutoSecCloud API."""
+
+    response = requests.post(
+        f"{API_BASE_URL}/login",
+        json={
+            "username": username,
+            "password": password,
+        },
+        timeout=REQUEST_TIMEOUT,
+    )
+
+    if response.status_code != 200:
+        raise ValueError("Login failed. Check your credentials and try again.")
+
+    data = response.json()
+    token = data.get("access_token")
+
+    if not token:
+        raise ValueError("The API did not return an access token.")
+
+    if data.get("role") != "admin":
+        raise PermissionError(
+            "The dashboard requires an admin account to access security statistics."
+        )
+
+    return token
+
+
+def api_get(endpoint, token):
+    """Make an authenticated GET request."""
+
+    response = requests.get(
+        f"{API_BASE_URL}{endpoint}",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+        timeout=REQUEST_TIMEOUT,
+    )
+
+    if response.status_code == 401:
+        raise PermissionError("Your session has expired. Please log in again.")
+
+    if response.status_code == 403:
+        raise PermissionError(
+            "Access denied. An administrator account is required."
+        )
+
+    response.raise_for_status()
+    return response.json()
+
+
+def load_dashboard_data(token):
+    """Retrieve statistics and recent security logs."""
+
+    stats = api_get("/stats", token)
+    attacks = api_get("/attacks", token)
+
+    logs = attacks.get("logs", [])
+
+    df = pd.DataFrame(logs)
+
+    expected_columns = [
+        "id",
+        "event",
+        "ip",
+        "username",
+        "status",
+        "reason",
+        "severity",
+        "timestamp",
+    ]
+
+    for column in expected_columns:
+        if column not in df.columns:
+            df[column] = pd.Series(dtype="object")
+
+    if not df.empty:
+        df["timestamp"] = pd.to_datetime(
+            df["timestamp"],
+            errors="coerce",
+        )
+
+    return stats, df
+
+
+# ==========================================
 # TITLE
-# =========================
+# ==========================================
 
 st.title("🛡️ AutoSecCloud Security Dashboard")
 
-st.markdown("""
-Real-Time AI Powered Intrusion Detection &
-Threat Monitoring System
-""")
+st.markdown(
+    """
+    Real-Time AI-Powered Intrusion Detection & Threat Monitoring System
 
-# =========================
-# LOG FILE
-# =========================
+    Monitor authentication activity, ML predictions, suspicious activity,
+    and IP-blocking events from your deployed security backend.
+    """
+)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-log_file = BASE_DIR / "logs" / "security_logs.log"
+st.caption(f"Connected API: {API_BASE_URL}")
 
-placeholder = st.empty()
 
-# =========================
-# LIVE DASHBOARD LOOP
-# =========================
+# ==========================================
+# LOGIN
+# ==========================================
 
-while True:
+if "access_token" not in st.session_state:
+    st.session_state.access_token = None
 
-    logs = []
+if "dashboard_username" not in st.session_state:
+    st.session_state.dashboard_username = None
 
-    try:
+if not st.session_state.access_token:
 
-        with open(log_file, "r") as file:
+    st.subheader("🔐 Administrator Login")
 
-            for line in file:
-
-                try:
-                    logs.append(json.loads(line))
-
-                except:
-                    pass
-
-        df = pd.DataFrame(logs)
-
-        with placeholder.container():
-
-            if not df.empty:
-
-                # =========================
-                # GLOBAL THREAT LEVEL
-                # =========================
-
-                latest_severity = "LOW"
-
-                if "severity" in df.columns:
-
-                    severity_priority = {
-                        "LOW": 1,
-                        "MEDIUM": 2,
-                        "HIGH": 3,
-                        "CRITICAL": 4
-                    }
-
-                    highest = max(
-                        df["severity"],
-                        key=lambda x:
-                        severity_priority.get(x, 0)
-                    )
-
-                    latest_severity = highest
-
-                # =========================
-                # THREAT LEVEL BANNER
-                # =========================
-
-                if latest_severity == "LOW":
-
-                    st.success(
-                        "🟢 SYSTEM STATUS: LOW THREAT"
-                    )
-
-                elif latest_severity == "MEDIUM":
-
-                    st.warning(
-                        "🟡 SYSTEM STATUS: MEDIUM THREAT"
-                    )
-
-                elif latest_severity == "HIGH":
-
-                    st.warning(
-                        "🟠 SYSTEM STATUS: HIGH THREAT"
-                    )
-
-                elif latest_severity == "CRITICAL":
-
-                    st.error(
-                        "🔴 SYSTEM STATUS: CRITICAL THREAT"
-                    )
-
-                # =========================
-                # METRICS
-                # =========================
-
-                total_events = len(df)
-
-                failed_logins = len(
-                    df[df["event"] == "failed_login"]
-                )
-
-                blocked_attempts = len(
-                    df[df["event"] == "blocked_ip_access_attempt"]
-                )
-
-                ml_anomalies = len(
-                    df[df["event"] == "ml_anomaly_detected"]
-                )
-
-                critical_threats = len(
-                    df[df["event"] == "critical_threat_detected"]
-                )
-
-                suspicious_users = len(
-                    df[df["event"] == "suspicious_username_detected"]
-                )
-
-                successful_logins = len(
-                    df[df["event"] == "successful_login"]
-                )
-
-                # =========================
-                # TOP METRICS
-                # =========================
-
-                st.subheader("📊 Security Metrics")
-
-                col1, col2, col3 = st.columns(3)
-
-                col1.metric(
-                    "Total Events",
-                    total_events
-                )
-
-                col2.metric(
-                    "Failed Logins",
-                    failed_logins
-                )
-
-                col3.metric(
-                    "Blocked Attempts",
-                    blocked_attempts
-                )
-
-                col4, col5, col6 = st.columns(3)
-
-                col4.metric(
-                    "ML Anomalies",
-                    ml_anomalies
-                )
-
-                col5.metric(
-                    "Critical Threats",
-                    critical_threats
-                )
-
-                col6.metric(
-                    "Suspicious Usernames",
-                    suspicious_users
-                )
-
-                # =========================
-                # EVENT DISTRIBUTION
-                # =========================
-
-                st.subheader("📈 Threat Event Distribution")
-
-                event_counts = (
-                    df["event"]
-                    .value_counts()
-                )
-
-                st.bar_chart(event_counts)
-
-                # =========================
-                # SEVERITY ANALYSIS
-                # =========================
-
-                if "severity" in df.columns:
-
-                    st.subheader(
-                        "🚨 Threat Severity Distribution"
-                    )
-
-                    severity_counts = (
-                        df["severity"]
-                        .value_counts()
-                    )
-
-                    st.bar_chart(
-                        severity_counts
-                    )
-
-                # =========================
-                # RECENT CRITICAL ALERTS
-                # =========================
-
-                st.subheader(
-                    "⚠️ Recent Critical Alerts"
-                )
-
-                critical_events = df[
-                    df["event"].isin([
-                        "critical_threat_detected",
-                        "ml_anomaly_detected",
-                        "traffic_spike_detected",
-                        "blocked_ip_access_attempt"
-                    ])
-                ]
-
-                st.dataframe(
-                    critical_events.tail(10),
-                    width="stretch"
-                )
-
-                # =========================
-                # RECENT SECURITY LOGS
-                # =========================
-
-                st.subheader(
-                    "📌 Live Security Logs"
-                )
-
-                st.dataframe(
-                    df.tail(25),
-                    width="stretch"
-                )
-
-                # =========================
-                # SUCCESS VS FAILURE
-                # =========================
-
-                st.subheader(
-                    "🔐 Authentication Analysis"
-                )
-
-                auth_data = pd.DataFrame({
-                    "Category": [
-                        "Successful",
-                        "Failed"
-                    ],
-                    "Count": [
-                        successful_logins,
-                        failed_logins
-                    ]
-                })
-
-                st.bar_chart(
-                    auth_data.set_index(
-                        "Category"
-                    )
-                )
-
-            else:
-
-                st.warning(
-                    "No security logs available yet."
-                )
-
-    except FileNotFoundError:
-
-        st.error(
-            "Security log file not found."
+    with st.form("admin_login_form"):
+        username = st.text_input("Username")
+        password = st.text_input(
+            "Password",
+            type="password",
         )
 
-    except Exception as e:
-
-        st.error(
-            f"Dashboard Error: {e}"
+        login_clicked = st.form_submit_button(
+            "Login",
+            type="primary",
+            use_container_width=True,
         )
 
-    time.sleep(2)
+    if login_clicked:
+        if not username or not password:
+            st.warning("Enter your username and password.")
+        else:
+            try:
+                with st.spinner("Authenticating with AutoSecCloud..."):
+                    token = api_login(username, password)
+
+                st.session_state.access_token = token
+                st.session_state.dashboard_username = username
+
+                st.rerun()
+
+            except requests.RequestException:
+                st.error(
+                    "Could not connect to the backend. "
+                    "Check the API deployment and try again."
+                )
+
+            except PermissionError as exc:
+                st.error(str(exc))
+
+            except ValueError as exc:
+                st.error(str(exc))
+
+    st.info(
+        "Sign in using your existing AutoSecCloud administrator account."
+    )
+
+    st.stop()
+
+
+# ==========================================
+# DASHBOARD CONTROLS
+# ==========================================
+
+header_col, refresh_col, logout_col = st.columns([5, 1, 1])
+
+with header_col:
+    st.success(
+        f"Authenticated as administrator: "
+        f"{st.session_state.dashboard_username}"
+    )
+
+with refresh_col:
+    refresh_clicked = st.button(
+        "🔄 Refresh",
+        use_container_width=True,
+    )
+
+with logout_col:
+    logout_clicked = st.button(
+        "Log out",
+        use_container_width=True,
+    )
+
+if logout_clicked:
+    st.session_state.access_token = None
+    st.session_state.dashboard_username = None
+    st.rerun()
+
+
+# ==========================================
+# LOAD LIVE DATA
+# ==========================================
+
+try:
+    with st.spinner("Loading live security data..."):
+        stats, df = load_dashboard_data(
+            st.session_state.access_token
+        )
+
+except PermissionError as exc:
+    st.error(str(exc))
+
+    st.session_state.access_token = None
+    st.session_state.dashboard_username = None
+
+    if st.button("Return to login"):
+        st.rerun()
+
+    st.stop()
+
+except requests.RequestException as exc:
+    st.error(
+        "Unable to retrieve data from the AutoSecCloud backend. "
+        "Check that Render is running and try refreshing."
+    )
+
+    with st.expander("Technical details"):
+        st.code(str(exc))
+
+    st.stop()
+
+except (ValueError, KeyError) as exc:
+    st.error(f"Unexpected API response: {exc}")
+    st.stop()
+
+
+# ==========================================
+# SYSTEM STATUS
+# ==========================================
+
+severity_priority = {
+    "LOW": 1,
+    "MEDIUM": 2,
+    "HIGH": 3,
+    "CRITICAL": 4,
+}
+
+if df.empty:
+    latest_severity = "LOW"
+else:
+    severities = (
+        df["severity"]
+        .fillna("LOW")
+        .astype(str)
+        .str.upper()
+    )
+
+    latest_severity = max(
+        severities,
+        key=lambda value: severity_priority.get(value, 0),
+    )
+
+if latest_severity == "LOW":
+    st.success("🟢 SYSTEM STATUS: LOW THREAT")
+elif latest_severity == "MEDIUM":
+    st.warning("🟡 SYSTEM STATUS: MEDIUM THREAT")
+elif latest_severity == "HIGH":
+    st.warning("🟠 SYSTEM STATUS: HIGH THREAT")
+else:
+    st.error("🔴 SYSTEM STATUS: CRITICAL THREAT")
+
+
+# ==========================================
+# SECURITY METRICS
+# ==========================================
+
+st.subheader("📊 Security Metrics")
+
+total_events = stats.get("total_logs", len(df))
+failed_logins = stats.get("failed_logins", 0)
+successful_logins = stats.get("successful_logins", 0)
+blocked_attacks = stats.get("blocked_attacks", 0)
+
+if df.empty:
+    ml_predictions = 0
+    suspicious_predictions = 0
+    critical_threats = 0
+    suspicious_users = 0
+    blocked_attempts = 0
+else:
+    events = df["event"].fillna("").astype(str)
+    statuses = df["status"].fillna("").astype(str).str.upper()
+    reasons = df["reason"].fillna("").astype(str)
+
+    ml_mask = events.eq("ml_prediction")
+
+    ml_predictions = int(ml_mask.sum())
+
+    suspicious_predictions = int(
+        (ml_mask & statuses.eq("SUSPICIOUS")).sum()
+    )
+
+    critical_threats = int(
+        df["severity"]
+        .fillna("")
+        .astype(str)
+        .str.upper()
+        .eq("CRITICAL")
+        .sum()
+    )
+
+    suspicious_users = int(
+        events.eq("suspicious_username_detected").sum()
+    )
+
+    blocked_attempts = int(
+        events.eq("blocked_ip_access_attempt").sum()
+    )
+
+    # Include ML-triggered blocks in the displayed blocked count.
+    blocked_attacks = max(
+        blocked_attacks,
+        int(
+            events.eq("ip_blocked").sum()
+            + events.eq("blocked_ip_access_attempt").sum()
+        ),
+    )
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Total Security Events", total_events)
+col2.metric("Failed Logins", failed_logins)
+col3.metric("Blocked Attacks", blocked_attacks)
+
+col4, col5, col6 = st.columns(3)
+
+col4.metric("ML Predictions", ml_predictions)
+col5.metric("Suspicious ML Predictions", suspicious_predictions)
+col6.metric("Critical Events", critical_threats)
+
+st.caption(
+    "Statistics are retrieved from the deployed API. "
+    "ML prediction counts are based on the returned attack-log records."
+)
+
+
+# ==========================================
+# EVENT DISTRIBUTION
+# ==========================================
+
+st.subheader("📈 Threat Event Distribution")
+
+if not df.empty:
+    event_counts = df["event"].fillna("UNKNOWN").value_counts()
+    st.bar_chart(event_counts)
+else:
+    st.info("No security events have been recorded yet.")
+
+
+# ==========================================
+# SEVERITY ANALYSIS
+# ==========================================
+
+st.subheader("🚨 Threat Severity Distribution")
+
+if not df.empty:
+    severity_counts = (
+        df["severity"]
+        .fillna("UNKNOWN")
+        .value_counts()
+    )
+
+    st.bar_chart(severity_counts)
+else:
+    st.info("No severity data is available yet.")
+
+
+# ==========================================
+# RECENT CRITICAL ALERTS
+# ==========================================
+
+st.subheader("⚠️ Recent Critical Alerts")
+
+if not df.empty:
+    alert_events = [
+        "critical_threat_detected",
+        "ml_anomaly_detected",
+        "traffic_spike_detected",
+        "blocked_ip_access_attempt",
+        "ip_blocked",
+    ]
+
+    critical_events = df[
+        df["event"].isin(alert_events)
+        | df["severity"]
+        .fillna("")
+        .astype(str)
+        .str.upper()
+        .isin(["HIGH", "CRITICAL"])
+    ]
+
+    if not critical_events.empty:
+        st.dataframe(
+            critical_events.sort_values(
+                "timestamp",
+                ascending=False,
+                na_position="last",
+            ).head(10),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.success("No high-severity alerts in the returned logs.")
+else:
+    st.info("No security logs available yet.")
+
+
+# ==========================================
+# LIVE SECURITY LOGS
+# ==========================================
+
+st.subheader("📌 Security Event Logs")
+
+if not df.empty:
+    st.dataframe(
+        df.sort_values(
+            "timestamp",
+            ascending=False,
+            na_position="last",
+        ).head(25),
+        use_container_width=True,
+        hide_index=True,
+    )
+else:
+    st.warning("No security logs available yet.")
+
+
+# ==========================================
+# AUTHENTICATION ANALYSIS
+# ==========================================
+
+st.subheader("🔐 Authentication Analysis")
+
+auth_data = pd.DataFrame(
+    {
+        "Category": ["Successful", "Failed"],
+        "Count": [successful_logins, failed_logins],
+    }
+)
+
+st.bar_chart(
+    auth_data.set_index("Category")
+)
+
+
+# ==========================================
+# ML PREDICTION DETAILS
+# ==========================================
+
+st.subheader("🤖 ML Threat Detection")
+
+if not df.empty:
+    ml_df = df[df["event"] == "ml_prediction"].copy()
+
+    if not ml_df.empty:
+        st.dataframe(
+            ml_df.sort_values(
+                "timestamp",
+                ascending=False,
+                na_position="last",
+            ).head(10),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("No ML prediction events are present in the returned logs.")
+else:
+    st.info("No ML prediction data is available.")
+
+
+# ==========================================
+# FOOTER / REFRESH
+# ==========================================
+
+st.divider()
+
+st.caption(
+    "AutoSecCloud | AI-Driven Self-Healing Cloud Security System"
+)
+
+if refresh_clicked:
+    st.rerun()
+
+st.caption(
+    "Use Refresh to retrieve the latest statistics and security logs."
+)
