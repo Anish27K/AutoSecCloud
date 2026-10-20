@@ -1,13 +1,9 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from services.auth_service import create_access_token
-from services.security_service import process_login
-
-from services.user_service import (
-    create_user,
-    get_user_role
-)
+from backend.services.auth_service import create_access_token
+from backend.services.security_service import process_login
+from backend.services.user_service import create_user, get_user_role
 
 router = APIRouter()
 

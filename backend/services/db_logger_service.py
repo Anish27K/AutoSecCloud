@@ -1,6 +1,6 @@
-from config.database import SessionLocal
+from backend.config.database import SessionLocal
 
-from models.attack_log_model import AttackLog
+from backend.models.attack_log_model import AttackLog
 
 # =========================
 # SAVE SECURITY EVENT

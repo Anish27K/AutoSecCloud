@@ -1,16 +1,17 @@
 from fastapi import FastAPI, Depends
 
-from routes.auth_routes import router as auth_router
-from routes.admin_routes import router as admin_router
+from backend.routes.auth_routes import router as auth_router
+from backend.routes.admin_routes import router as admin_router
 
-from services.auth_service import (
+
+from backend.services.auth_service import (
     verify_token,
     verify_admin
 )
 
-from services.user_service import create_users_table
+from backend.services.user_service import create_users_table
 
-from init_db import init_db
+from backend.init_db import init_db
 
 # =========================
 # FASTAPI APP

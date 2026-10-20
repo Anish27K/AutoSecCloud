@@ -6,10 +6,9 @@ import time
 import joblib
 import pandas as pd
 
-from utils.logger_config import logger
-from services.db_logger_service import save_attack_log
-from services.user_service import verify_user
-
+from backend.utils.logger_config import logger
+from backend.services.db_logger_service import save_attack_log
+from backend.services.user_service import verify_user
 
 # ==========================================
 # LOAD RANDOM FOREST CLASSIFIER

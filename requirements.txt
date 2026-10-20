@@ -3,7 +3,7 @@ uvicorn
 streamlit
 pandas
 numpy
-scikit-learn
+scikit-learn==1.8.0
 joblib
 SQLAlchemy
 pydantic
@@ -13,3 +13,4 @@ bcrypt==4.0.1
 python-jose
 python-dotenv
 python-json-logger
+psycopg[binary]

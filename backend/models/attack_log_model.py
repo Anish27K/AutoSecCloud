@@ -5,7 +5,7 @@ from sqlalchemy import (
     DateTime
 )
 
-from config.database import Base
+from backend.config.database import Base
 
 from datetime import datetime
 
