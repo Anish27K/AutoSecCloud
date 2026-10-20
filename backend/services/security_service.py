@@ -154,7 +154,9 @@ def track_request(username, client_ip, current_time):
 
 
 # ==========================================
+
 # RUN ML PREDICTION
+
 # ==========================================
 
 def predict_suspicious_activity(
@@ -176,14 +178,9 @@ def predict_suspicious_activity(
     )
 
     prediction = str(model.predict(features)[0])
-
     probabilities = model.predict_proba(features)[0]
-
     suspicious_index = MODEL_CLASSES.index("SUSPICIOUS")
-
-    suspicious_probability = float(
-        probabilities[suspicious_index]
-    )
+    suspicious_probability = float(probabilities[suspicious_index])
 
     log_security_event(
         event="ml_prediction",
@@ -198,12 +195,16 @@ def predict_suspicious_activity(
         suspicious_probability=suspicious_probability,
     )
 
+    save_attack_log(
+        event="ml_prediction",
+        ip=client_ip,
+        username=username,
+        status=prediction,
+        reason=f"PROBABILITY_{suspicious_probability:.4f}",
+        severity="LOW",
+    )
+
     return prediction, suspicious_probability
-
-
-# ==========================================
-# TEMPORARILY BLOCK AN IP
-# ==========================================
 
 def block_ip(
     client_ip,
