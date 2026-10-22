@@ -39,17 +39,22 @@ def api_login(username, password):
     )
 
     if response.status_code != 200:
-        raise ValueError("Login failed. Check your credentials and try again.")
+        raise ValueError(
+            "Login failed. Check your credentials and try again."
+        )
 
     data = response.json()
     token = data.get("access_token")
 
     if not token:
-        raise ValueError("The API did not return an access token.")
+        raise ValueError(
+            "The API did not return an access token."
+        )
 
     if data.get("role") != "admin":
         raise PermissionError(
-            "The dashboard requires an admin account to access security statistics."
+            "The dashboard requires an admin account "
+            "to access security statistics."
         )
 
     return token
@@ -67,7 +72,9 @@ def api_get(endpoint, token):
     )
 
     if response.status_code == 401:
-        raise PermissionError("Your session has expired. Please log in again.")
+        raise PermissionError(
+            "Your session has expired. Please log in again."
+        )
 
     if response.status_code == 403:
         raise PermissionError(
@@ -85,7 +92,6 @@ def load_dashboard_data(token):
     attacks = api_get("/attacks", token)
 
     logs = attacks.get("logs", [])
-
     df = pd.DataFrame(logs)
 
     expected_columns = [
@@ -107,6 +113,7 @@ def load_dashboard_data(token):
         df["timestamp"] = pd.to_datetime(
             df["timestamp"],
             errors="coerce",
+            utc=True,
         )
 
     return stats, df
@@ -162,7 +169,9 @@ if not st.session_state.access_token:
             st.warning("Enter your username and password.")
         else:
             try:
-                with st.spinner("Authenticating with AutoSecCloud..."):
+                with st.spinner(
+                    "Authenticating with AutoSecCloud..."
+                ):
                     token = api_login(username, password)
 
                 st.session_state.access_token = token
@@ -257,39 +266,151 @@ except (ValueError, KeyError) as exc:
 
 
 # ==========================================
-# SYSTEM STATUS
+# NORMALIZE SECURITY LOGS
 # ==========================================
 
-severity_priority = {
-    "LOW": 1,
-    "MEDIUM": 2,
-    "HIGH": 3,
-    "CRITICAL": 4,
-}
-
-if df.empty:
-    latest_severity = "LOW"
-else:
-    severities = (
-        df["severity"]
-        .fillna("LOW")
+if not df.empty:
+    df["event"] = (
+        df["event"]
+        .fillna("")
         .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    df["status"] = (
+        df["status"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
         .str.upper()
     )
 
-    latest_severity = max(
-        severities,
-        key=lambda value: severity_priority.get(value, 0),
+    df["severity"] = (
+        df["severity"]
+        .fillna("LOW")
+        .astype(str)
+        .str.strip()
+        .str.upper()
     )
 
-if latest_severity == "LOW":
-    st.success("🟢 SYSTEM STATUS: LOW THREAT")
-elif latest_severity == "MEDIUM":
-    st.warning("🟡 SYSTEM STATUS: MEDIUM THREAT")
-elif latest_severity == "HIGH":
-    st.warning("🟠 SYSTEM STATUS: HIGH THREAT")
+    df["ip"] = (
+        df["ip"]
+        .fillna("UNKNOWN")
+        .astype(str)
+        .str.strip()
+    )
+
+    df["timestamp"] = pd.to_datetime(
+        df["timestamp"],
+        errors="coerce",
+        utc=True,
+    )
+
+
+# ==========================================
+# SYSTEM STATUS
+# ==========================================
+
+if df.empty:
+    st.success("🟢 SYSTEM STATUS: NO RECORDED THREATS")
+
 else:
-    st.error("🔴 SYSTEM STATUS: CRITICAL THREAT")
+    # Examine only recorded block-state transitions.
+    block_events = df[
+        df["event"].isin(
+            ["ip_blocked", "ip_unblocked"]
+        )
+    ].dropna(subset=["timestamp"]).copy()
+
+    if block_events.empty:
+        latest_block_events = block_events
+    else:
+        # Find each IP's latest block or unblock transition.
+        latest_block_events = (
+            block_events
+            .sort_values("timestamp")
+            .groupby("ip", dropna=False)
+            .tail(1)
+        )
+
+    # A block is unresolved in the returned logs if the latest
+    # transition for that IP is ip_blocked with status BLOCKED.
+    active_blocks = latest_block_events[
+        (latest_block_events["event"] == "ip_blocked")
+        & (latest_block_events["status"] == "BLOCKED")
+    ]
+
+    if not active_blocks.empty:
+        st.error(
+            "🔴 SYSTEM STATUS: CRITICAL THREAT — "
+            f"{len(active_blocks)} IP(s) with "
+            "unresolved block events"
+        )
+
+    else:
+        # An unblock event means the historical block was recorded
+        # as recovered. Do not let that old block alone keep the
+        # system at HIGH or CRITICAL severity.
+        recovered_ips = set(
+            latest_block_events.loc[
+                latest_block_events["event"] == "ip_unblocked",
+                "ip",
+            ]
+        )
+
+        relevant_events = df[
+            ~(
+                df["ip"].isin(recovered_ips)
+                & df["event"].isin(
+                    [
+                        "ip_blocked",
+                        "blocked_ip_access_attempt",
+                    ]
+                )
+            )
+        ].copy()
+
+        # Use the latest event per IP, not the highest severity
+        # across every historical event.
+        latest_events = (
+            relevant_events
+            .dropna(subset=["timestamp"])
+            .sort_values("timestamp")
+            .groupby("ip", dropna=False)
+            .tail(1)
+        )
+
+        severity_priority = {
+            "LOW": 1,
+            "MEDIUM": 2,
+            "HIGH": 3,
+            "CRITICAL": 4,
+        }
+
+        if latest_events.empty:
+            st.success(
+                "🟢 SYSTEM STATUS: NO ACTIVE BLOCKS REPORTED"
+            )
+        else:
+            latest_severity = max(
+                latest_events["severity"],
+                key=lambda value: severity_priority.get(
+                    value, 0
+                ),
+            )
+
+            if latest_severity == "LOW":
+                st.success("🟢 SYSTEM STATUS: LOW THREAT")
+
+            elif latest_severity == "MEDIUM":
+                st.warning("🟡 SYSTEM STATUS: MEDIUM THREAT")
+
+            elif latest_severity == "HIGH":
+                st.warning("🟠 SYSTEM STATUS: HIGH THREAT")
+
+            else:
+                st.error("🔴 SYSTEM STATUS: CRITICAL THREAT")
 
 
 # ==========================================
@@ -309,13 +430,12 @@ if df.empty:
     critical_threats = 0
     suspicious_users = 0
     blocked_attempts = 0
+
 else:
-    events = df["event"].fillna("").astype(str)
-    statuses = df["status"].fillna("").astype(str).str.upper()
-    reasons = df["reason"].fillna("").astype(str)
+    events = df["event"]
+    statuses = df["status"]
 
     ml_mask = events.eq("ml_prediction")
-
     ml_predictions = int(ml_mask.sum())
 
     suspicious_predictions = int(
@@ -323,12 +443,7 @@ else:
     )
 
     critical_threats = int(
-        df["severity"]
-        .fillna("")
-        .astype(str)
-        .str.upper()
-        .eq("CRITICAL")
-        .sum()
+        df["severity"].eq("CRITICAL").sum()
     )
 
     suspicious_users = int(
@@ -339,7 +454,7 @@ else:
         events.eq("blocked_ip_access_attempt").sum()
     )
 
-    # Include ML-triggered blocks in the displayed blocked count.
+    # Include recorded block events in the displayed blocked count.
     blocked_attacks = max(
         blocked_attacks,
         int(
@@ -373,7 +488,10 @@ st.caption(
 st.subheader("📈 Threat Event Distribution")
 
 if not df.empty:
-    event_counts = df["event"].fillna("UNKNOWN").value_counts()
+    event_counts = df["event"].replace(
+        "", "UNKNOWN"
+    ).value_counts()
+
     st.bar_chart(event_counts)
 else:
     st.info("No security events have been recorded yet.")
@@ -386,11 +504,9 @@ else:
 st.subheader("🚨 Threat Severity Distribution")
 
 if not df.empty:
-    severity_counts = (
-        df["severity"]
-        .fillna("UNKNOWN")
-        .value_counts()
-    )
+    severity_counts = df["severity"].replace(
+        "", "UNKNOWN"
+    ).value_counts()
 
     st.bar_chart(severity_counts)
 else:
@@ -414,11 +530,7 @@ if not df.empty:
 
     critical_events = df[
         df["event"].isin(alert_events)
-        | df["severity"]
-        .fillna("")
-        .astype(str)
-        .str.upper()
-        .isin(["HIGH", "CRITICAL"])
+        | df["severity"].isin(["HIGH", "CRITICAL"])
     ]
 
     if not critical_events.empty:
@@ -432,7 +544,9 @@ if not df.empty:
             hide_index=True,
         )
     else:
-        st.success("No high-severity alerts in the returned logs.")
+        st.success(
+            "No high-severity alerts in the returned logs."
+        )
 else:
     st.info("No security logs available yet.")
 
@@ -495,7 +609,9 @@ if not df.empty:
             hide_index=True,
         )
     else:
-        st.info("No ML prediction events are present in the returned logs.")
+        st.info(
+            "No ML prediction events are present in the returned logs."
+        )
 else:
     st.info("No ML prediction data is available.")
 
