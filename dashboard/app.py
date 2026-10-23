@@ -27,7 +27,7 @@ REQUEST_TIMEOUT = 30
 # ==========================================
 
 def api_login(username, password):
-    """Authenticate with the deployed AutoSecCloud API."""
+    """Authenticate with the AutoSecCloud API."""
 
     response = requests.post(
         f"{API_BASE_URL}/login",
@@ -53,8 +53,7 @@ def api_login(username, password):
 
     if data.get("role") != "admin":
         raise PermissionError(
-            "The dashboard requires an admin account "
-            "to access security statistics."
+            "The dashboard requires an admin account."
         )
 
     return token
@@ -86,10 +85,11 @@ def api_get(endpoint, token):
 
 
 def load_dashboard_data(token):
-    """Retrieve statistics and recent security logs."""
+    """Retrieve statistics, security logs, and active IP blocks."""
 
     stats = api_get("/stats", token)
     attacks = api_get("/attacks", token)
+    active_blocks_data = api_get("/active-blocks", token)
 
     logs = attacks.get("logs", [])
     df = pd.DataFrame(logs)
@@ -116,7 +116,9 @@ def load_dashboard_data(token):
             utc=True,
         )
 
-    return stats, df
+    active_blocks = active_blocks_data.get("active_blocks", [])
+
+    return stats, df, active_blocks
 
 
 # ==========================================
@@ -169,9 +171,7 @@ if not st.session_state.access_token:
             st.warning("Enter your username and password.")
         else:
             try:
-                with st.spinner(
-                    "Authenticating with AutoSecCloud..."
-                ):
+                with st.spinner("Authenticating with AutoSecCloud..."):
                     token = api_login(username, password)
 
                 st.session_state.access_token = token
@@ -192,7 +192,7 @@ if not st.session_state.access_token:
                 st.error(str(exc))
 
     st.info(
-        "Sign in using your existing AutoSecCloud administrator account."
+        "Sign in using your AutoSecCloud administrator account."
     )
 
     st.stop()
@@ -234,7 +234,7 @@ if logout_clicked:
 
 try:
     with st.spinner("Loading live security data..."):
-        stats, df = load_dashboard_data(
+        stats, df, active_blocks = load_dashboard_data(
             st.session_state.access_token
         )
 
@@ -251,8 +251,8 @@ except PermissionError as exc:
 
 except requests.RequestException as exc:
     st.error(
-        "Unable to retrieve data from the AutoSecCloud backend. "
-        "Check that Render is running and try refreshing."
+        "Unable to retrieve data from AutoSecCloud. "
+        "Check the backend deployment and API configuration."
     )
 
     with st.expander("Technical details"):
@@ -312,75 +312,46 @@ if not df.empty:
 # SYSTEM STATUS
 # ==========================================
 
-if df.empty:
-    st.success("🟢 SYSTEM STATUS: NO RECORDED THREATS")
+st.subheader("🖥️ Current System Status")
 
-else:
-    # Examine only recorded block-state transitions.
-    block_events = df[
-        df["event"].isin(
-            ["ip_blocked", "ip_unblocked"]
-        )
-    ].dropna(subset=["timestamp"]).copy()
+if active_blocks:
+    st.error(
+        f"🔴 SYSTEM STATUS: CRITICAL THREAT — "
+        f"{len(active_blocks)} active IP block(s)"
+    )
 
-    if block_events.empty:
-        latest_block_events = block_events
-    else:
-        # Find each IP's latest block or unblock transition.
-        latest_block_events = (
-            block_events
-            .sort_values("timestamp")
-            .groupby("ip", dropna=False)
-            .tail(1)
-        )
+    st.caption(
+        "The current block status comes from the backend's "
+        "active-block endpoint."
+    )
 
-    # A block is unresolved in the returned logs if the latest
-    # transition for that IP is ip_blocked with status BLOCKED.
-    active_blocks = latest_block_events[
-        (latest_block_events["event"] == "ip_blocked")
-        & (latest_block_events["status"] == "BLOCKED")
+    blocks_df = pd.DataFrame(active_blocks)
+
+    expected_block_columns = [
+        "ip",
+        "reason",
+        "remaining_seconds",
     ]
 
-    if not active_blocks.empty:
-        st.error(
-            "🔴 SYSTEM STATUS: CRITICAL THREAT — "
-            f"{len(active_blocks)} IP(s) with "
-            "unresolved block events"
-        )
+    for column in expected_block_columns:
+        if column not in blocks_df.columns:
+            blocks_df[column] = None
+
+    st.dataframe(
+        blocks_df[expected_block_columns],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+else:
+    st.success("🟢 NO CURRENTLY ACTIVE IP BLOCKS")
+
+    # Historical event severity is displayed separately
+    # so old alerts are not mistaken for active IP blocks.
+    if df.empty:
+        st.info("No security events have been recorded yet.")
 
     else:
-        # An unblock event means the historical block was recorded
-        # as recovered. Do not let that old block alone keep the
-        # system at HIGH or CRITICAL severity.
-        recovered_ips = set(
-            latest_block_events.loc[
-                latest_block_events["event"] == "ip_unblocked",
-                "ip",
-            ]
-        )
-
-        relevant_events = df[
-            ~(
-                df["ip"].isin(recovered_ips)
-                & df["event"].isin(
-                    [
-                        "ip_blocked",
-                        "blocked_ip_access_attempt",
-                    ]
-                )
-            )
-        ].copy()
-
-        # Use the latest event per IP, not the highest severity
-        # across every historical event.
-        latest_events = (
-            relevant_events
-            .dropna(subset=["timestamp"])
-            .sort_values("timestamp")
-            .groupby("ip", dropna=False)
-            .tail(1)
-        )
-
         severity_priority = {
             "LOW": 1,
             "MEDIUM": 2,
@@ -388,29 +359,51 @@ else:
             "CRITICAL": 4,
         }
 
-        if latest_events.empty:
-            st.success(
-                "🟢 SYSTEM STATUS: NO ACTIVE BLOCKS REPORTED"
+        valid_severities = df["severity"].map(
+            severity_priority
+        ).dropna()
+
+        if valid_severities.empty:
+            st.info(
+                "No severity information is available "
+                "in the returned security logs."
             )
+
         else:
-            latest_severity = max(
-                latest_events["severity"],
-                key=lambda value: severity_priority.get(
-                    value, 0
-                ),
+            highest_severity_rank = int(
+                valid_severities.max()
             )
 
-            if latest_severity == "LOW":
-                st.success("🟢 SYSTEM STATUS: LOW THREAT")
+            highest_severity = next(
+                severity
+                for severity, rank in severity_priority.items()
+                if rank == highest_severity_rank
+            )
 
-            elif latest_severity == "MEDIUM":
-                st.warning("🟡 SYSTEM STATUS: MEDIUM THREAT")
+            if highest_severity == "LOW":
+                st.success(
+                    "📘 HISTORICAL LOG SEVERITY: LOW"
+                )
 
-            elif latest_severity == "HIGH":
-                st.warning("🟠 SYSTEM STATUS: HIGH THREAT")
+            elif highest_severity == "MEDIUM":
+                st.info(
+                    "🟡 HISTORICAL LOG SEVERITY: MEDIUM"
+                )
+
+            elif highest_severity == "HIGH":
+                st.warning(
+                    "🟠 HISTORICAL LOG SEVERITY: HIGH"
+                )
 
             else:
-                st.error("🔴 SYSTEM STATUS: CRITICAL THREAT")
+                st.warning(
+                    "🔴 HISTORICAL LOG SEVERITY: CRITICAL"
+                )
+
+            st.caption(
+                "Historical severity describes recorded events, "
+                "not the current active IP-block state."
+            )
 
 
 # ==========================================
@@ -454,7 +447,7 @@ else:
         events.eq("blocked_ip_access_attempt").sum()
     )
 
-    # Include recorded block events in the displayed blocked count.
+    # This is a historical event count, not the live active-block count.
     blocked_attacks = max(
         blocked_attacks,
         int(
@@ -476,8 +469,8 @@ col5.metric("Suspicious ML Predictions", suspicious_predictions)
 col6.metric("Critical Events", critical_threats)
 
 st.caption(
-    "Statistics are retrieved from the deployed API. "
-    "ML prediction counts are based on the returned attack-log records."
+    "Statistics are retrieved from the backend. "
+    "ML prediction counts are based on returned attack-log records."
 )
 
 
@@ -493,6 +486,7 @@ if not df.empty:
     ).value_counts()
 
     st.bar_chart(event_counts)
+
 else:
     st.info("No security events have been recorded yet.")
 
@@ -509,6 +503,7 @@ if not df.empty:
     ).value_counts()
 
     st.bar_chart(severity_counts)
+
 else:
     st.info("No severity data is available yet.")
 
@@ -543,10 +538,12 @@ if not df.empty:
             use_container_width=True,
             hide_index=True,
         )
+
     else:
         st.success(
             "No high-severity alerts in the returned logs."
         )
+
 else:
     st.info("No security logs available yet.")
 
@@ -567,6 +564,7 @@ if not df.empty:
         use_container_width=True,
         hide_index=True,
     )
+
 else:
     st.warning("No security logs available yet.")
 
@@ -596,7 +594,9 @@ st.bar_chart(
 st.subheader("🤖 ML Threat Detection")
 
 if not df.empty:
-    ml_df = df[df["event"] == "ml_prediction"].copy()
+    ml_df = df[
+        df["event"] == "ml_prediction"
+    ].copy()
 
     if not ml_df.empty:
         st.dataframe(
@@ -608,10 +608,13 @@ if not df.empty:
             use_container_width=True,
             hide_index=True,
         )
+
     else:
         st.info(
-            "No ML prediction events are present in the returned logs."
+            "No ML prediction events are present "
+            "in the returned logs."
         )
+
 else:
     st.info("No ML prediction data is available.")
 

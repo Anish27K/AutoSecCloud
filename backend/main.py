@@ -4,6 +4,9 @@ from backend.routes.auth_routes import router as auth_router
 from backend.routes.admin_routes import router as admin_router
 
 
+import time
+from backend.services.security_service import blocked_ips, BLOCK_DURATION
+
 from backend.services.auth_service import (
     verify_token,
     verify_admin
@@ -74,4 +77,31 @@ def admin_route(
     return {
         "message": "Welcome Admin",
         "user": user
+    }
+# =========================
+# ACTIVE IP BLOCKS
+# =========================
+
+@app.get("/active-blocks")
+def get_active_blocks(
+    user=Depends(verify_admin)
+):
+    current_time = time.time()
+
+    active_blocks = []
+
+    for ip, block_data in blocked_ips.items():
+        elapsed = current_time - block_data["blocked_at"]
+        remaining = BLOCK_DURATION - elapsed
+
+        if remaining > 0:
+            active_blocks.append({
+                "ip": ip,
+                "reason": block_data["reason"],
+                "remaining_seconds": int(remaining)
+            })
+
+    return {
+        "active_blocks": active_blocks,
+        "total_active_blocks": len(active_blocks)
     }
