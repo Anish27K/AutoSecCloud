@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoSecCloud | Secure Access</title>
+
+<style>
+:root {
+    --bg: #07111f;
+    --panel: #0c1a2b;
+    --blue: #36a9ff;
+    --cyan: #48e0e8;
+    --text: #edf6ff;
+    --muted: #8ca5bf;
+    --border: rgba(119, 171, 220, 0.18);
+    --danger: #ff7185;
+    --success: #4ee0ad;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+    color: var(--text);
+    background:
+        radial-gradient(ellipse at 12% 15%, #102d4c 0, transparent 40%),
+        radial-gradient(ellipse at 88% 85%, #10343d 0, transparent 38%),
+        var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 Roboto, Arial, sans-serif;
+}
+
+.layout {
+    width: 100%;
+    max-width: 1040px;
+    min-height: 620px;
+    display: grid;
+    grid-template-columns: 1fr 0.9fr;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 25px;
+    background: rgba(9, 23, 39, 0.88);
+    box-shadow: 0 30px 100px rgba(0, 0, 0, 0.35);
+}
+
+.hero {
+    padding: 54px 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(145deg, rgba(20,53,83,.85), rgba(7,17,31,.2));
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    width: 320px;
+    height: 320px;
+    right: -140px;
+    top: 160px;
+    border: 1px solid rgba(72,224,232,.22);
+    border-radius: 50%;
+    box-shadow: 0 0 0 35px rgba(72,224,232,.035),
+                0 0 0 70px rgba(72,224,232,.025);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    position: relative;
+    z-index: 1;
+}
+
+.brand-icon {
+    width: 47px;
+    height: 47px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(72,224,232,.45);
+    border-radius: 14px;
+    color: var(--cyan);
+    background: rgba(54,169,255,.10);
+    font-size: 25px;
+}
+
+.brand-name {
+    font-size: 21px;
+    font-weight: 750;
+    letter-spacing: -.6px;
+}
+
+.brand-subtitle {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 1;
+    margin: 50px 0;
+}
+
+.eyebrow {
+    color: var(--cyan);
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+}
+
+h1 {
+    margin: 20px 0;
+    font-size: clamp(36px,4vw,52px);
+    line-height: 1.12;
+    letter-spacing: -1.8px;
+}
+
+h1 span { color: var(--cyan); }
+
+.hero-description {
+    max-width: 390px;
+    color: #a5bad0;
+    font-size: 14px;
+    line-height: 1.9;
+}
+
+.features { display: grid; gap: 17px; }
+
+.feature {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #d2e2f2;
+    font-size: 13px;
+}
+
+.feature-icon {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--cyan);
+    background: rgba(72,224,232,.08);
+}
+
+.hero-footer {
+    color: #69839d;
+    font-size: 11px;
+}
+
+.login-panel {
+    padding: 48px 45px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: rgba(8,20,34,.75);
+}
+
+.panel-top { margin-bottom: 26px; }
+
+.panel-top h2 {
+    margin: 0 0 12px;
+    font-size: 29px;
+    letter-spacing: -.8px;
+}
+
+.panel-top p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 25px;
+    padding: 12px 14px;
+    border: 1px solid rgba(78,224,173,.17);
+    border-radius: 10px;
+    color: #a6e9d1;
+    background: rgba(78,224,173,.055);
+    font-size: 12px;
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 10px rgba(78,224,173,.65);
+}
+
+label {
+    display: block;
+    margin-bottom: 9px;
+    color: #dbe9f7;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.field { margin-bottom: 19px; }
+
+.input-wrap { position: relative; }
+
+input {
+    width: 100%;
+    height: 49px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    outline: none;
+    color: var(--text);
+    background: var(--panel);
+    font-size: 13px;
+    transition: border-color .2s, box-shadow .2s;
+}
+
+input:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(54,169,255,.10);
+}
+
+input::placeholder { color: #627c96; }
+
+.password-input { padding-right: 68px; }
+
+.toggle-password {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    color: var(--cyan);
+    background: transparent;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.sign-in {
+    width: 100%;
+    min-height: 49px;
+    margin-top: 5px;
+    border: 0;
+    border-radius: 10px;
+    color: #031321;
+    background: linear-gradient(100deg,var(--blue),var(--cyan));
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform .2s, filter .2s;
+}
+
+.sign-in:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+.sign-in:disabled { opacity: .65; cursor: wait; transform: none; }
+
+.switch-auth {
+    margin-top: 19px;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+.text-button {
+    border: 0;
+    padding: 3px;
+    color: var(--cyan);
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+}
+
+.text-button:hover { text-decoration: underline; }
+
+.message {
+    display: none;
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 9px;
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.message.error {
+    display: block;
+    color: #ffb0bb;
+    border: 1px solid rgba(255,113,133,.25);
+    background: rgba(255,113,133,.07);
+}
+
+.message.success {
+    display: block;
+    color: #a5f4d6;
+    border: 1px solid rgba(78,224,173,.25);
+    background: rgba(78,224,173,.07);
+}
+
+.result-actions { display: none; margin-top: 12px; }
+
+.result-actions a {
+    color: var(--cyan);
+    font-size: 12px;
+    text-decoration: none;
+}
+
+.result-actions a:hover { text-decoration: underline; }
+
+.divider {
+    height: 1px;
+    margin: 25px 0 18px;
+    background: var(--border);
+}
+
+.security-note {
+    color: #7f98b1;
+    font-size: 11px;
+    line-height: 1.8;
+    text-align: center;
+}
+
+.security-note strong { color: #aec5dc; }
+
+[hidden] { display: none !important; }
+
+@media (max-width:780px) {
+    body { padding: 14px; }
+    .layout { max-width: 480px; grid-template-columns: 1fr; }
+    .hero { padding: 28px; }
+    .hero-content { margin: 35px 0 25px; }
+    .hero-content h1 { font-size: 36px; }
+    .features, .hero-footer { display: none; }
+    .login-panel { padding: 32px 28px; }
+}
+</style>
+</head>
+
+<body>
+<main class="layout">
+
+    <section class="hero">
+        <div class="brand">
+            <div class="brand-icon" aria-hidden="true">⬡</div>
+            <div>
+                <div class="brand-name">AutoSecCloud</div>
+                <div class="brand-subtitle">Intelligent Cloud Security</div>
+            </div>
+        </div>
+
+        <div class="hero-content">
+            <div class="eyebrow">AI-powered protection</div>
+            <h1>Security that<br>thinks <span>ahead.</span></h1>
+
+            <p class="hero-description">
+                A unified security portal for monitoring suspicious
+                activity, intelligent threat classification, and
+                automated security responses.
+            </p>
+
+            <div class="features">
+                <div class="feature">
+                    <span class="feature-icon">◈</span>
+                    <span>Machine-learning threat detection</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">⌁</span>
+                    <span>Automated security response</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">✓</span>
+                    <span>Authentication and access controls</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="hero-footer">AUTOSECCLOUD · SECURE ACCESS PORTAL</div>
+    </section>
+
+    <section class="login-panel">
+        <div class="panel-top">
+            <h2 id="panelTitle">Welcome back</h2>
+            <p id="panelDescription">
+                Sign in with your credentials to continue to AutoSecCloud.
+            </p>
+        </div>
+
+        <div class="status">
+            <span class="status-dot"></span>
+            Secure access portal
+        </div>
+
+        <!-- LOGIN FORM -->
+        <form id="loginForm">
+            <div class="field">
+                <label for="username">Username</label>
+                <input id="username" name="username" type="text"
+                       placeholder="Enter your username"
+                       autocomplete="username" required>
+            </div>
+
+            <div class="field">
+                <label for="password">Password</label>
+                <div class="input-wrap">
+                    <input id="password" name="password"
+                           class="password-input" type="password"
+                           placeholder="Enter your password"
+                           autocomplete="current-password" required>
+                    <button class="toggle-password" id="togglePassword"
+                            type="button">SHOW</button>
+                </div>
+            </div>
+
+            <button class="sign-in" id="signInButton" type="submit">
+                Sign In Securely →
+            </button>
+
+            <div class="switch-auth">
+                Don't have an account?
+                <button class="text-button" id="showRegister" type="button">
+                    Create Account
+                </button>
+            </div>
+        </form>
+
+        <!-- REGISTRATION FORM -->
+        <form id="registerForm" hidden>
+            <div class="field">
+                <label for="registerUsername">Username</label>
+                <input id="registerUsername" name="username" type="text"
+                       placeholder="Choose a username"
+                       autocomplete="username" required>
+            </div>
+
+            <div class="field">
+                <label for="registerPassword">Password</label>
+                <input id="registerPassword" name="password" type="password"
+                       placeholder="Create a password"
+                       autocomplete="new-password" required>
+            </div>
+
+            <div class="field">
+                <label for="confirmPassword">Confirm Password</label>
+                <input id="confirmPassword" name="confirmPassword"
+                       type="password" placeholder="Re-enter your password"
+                       autocomplete="new-password" required>
+            </div>
+
+            <button class="sign-in" id="registerButton" type="submit">
+                Create Account →
+            </button>
+
+            <div class="switch-auth">
+                Already have an account?
+                <button class="text-button" id="showLogin" type="button">
+                    Sign In
+                </button>
+            </div>
+        </form>
+
+        <!-- Shared feedback area -->
+        <div id="message" class="message" role="status"
+             aria-live="polite"></div>
+
+        <div class="result-actions" id="resultActions">
+            <a href="#" id="continueLink">Continue to protected API →</a>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="security-note">
+            <strong>Protected by AutoSecCloud</strong><br>
+            Requests are processed by the configured authentication
+            and security services.
+        </div>
+    </section>
+</main>
+
+<script>
+const loginForm = document.getElementById("loginForm");
+const registerForm = document.getElementById("registerForm");
+const usernameInput = document.getElementById("username");
+const passwordInput = document.getElementById("password");
+const togglePassword = document.getElementById("togglePassword");
+const signInButton = document.getElementById("signInButton");
+const registerButton = document.getElementById("registerButton");
+const message = document.getElementById("message");
+const resultActions = document.getElementById("resultActions");
+const continueLink = document.getElementById("continueLink");
+const panelTitle = document.getElementById("panelTitle");
+const panelDescription = document.getElementById("panelDescription");
+
+let accessToken = null;
+
+function showMessage(text, type) {
+    message.textContent = text;
+    message.className = "message " + type;
+}
+
+function clearMessage() {
+    message.textContent = "";
+    message.className = "message";
+    resultActions.style.display = "none";
+}
+
+function switchForm(mode) {
+    clearMessage();
+    accessToken = null;
+
+    const registering = mode === "register";
+    loginForm.hidden = registering;
+    registerForm.hidden = !registering;
+
+    panelTitle.textContent = registering ? "Create account" : "Welcome back";
+    panelDescription.textContent = registering
+        ? "Create an account to access AutoSecCloud."
+        : "Sign in with your credentials to continue to AutoSecCloud.";
+}
+
+function describeError(data, status) {
+    if (data && typeof data.detail === "string") return data.detail;
+    if (data && typeof data.message === "string") return data.message;
+    if (data && typeof data.reason === "string") return data.reason;
+
+    if (data && typeof data.status === "string"
+        && data.status !== "success") {
+        return "Request was not successful: " + data.status;
+    }
+
+    return "Request failed (HTTP " + status + "). Please try again.";
+}
+
+document.getElementById("showRegister").addEventListener("click", () => {
+    switchForm("register");
+});
+
+document.getElementById("showLogin").addEventListener("click", () => {
+    switchForm("login");
+});
+
+togglePassword.addEventListener("click", () => {
+    const showing = passwordInput.type === "text";
+    passwordInput.type = showing ? "password" : "text";
+    togglePassword.textContent = showing ? "SHOW" : "HIDE";
+    togglePassword.setAttribute("aria-label",
+        showing ? "Show password" : "Hide password");
+});
+
+// LOGIN
+loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearMessage();
+    accessToken = null;
+
+    signInButton.disabled = true;
+    signInButton.textContent = "Verifying credentials…";
+
+    try {
+        const response = await fetch("/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                username: usernameInput.value.trim(),
+                password: passwordInput.value
+            })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || data.status !== "success"
+            || !data.access_token) {
+            showMessage(describeError(data, response.status), "error");
+            return;
+        }
+
+        accessToken = data.access_token;
+
+        showMessage(
+            "Authentication successful. Role: "
+            + String(data.role || "user") + ".",
+            "success"
+        );
+
+        resultActions.style.display = "block";
+
+    } catch (error) {
+        showMessage(
+            "Could not connect to AutoSecCloud. Check that the backend is running.",
+            "error"
+        );
+    } finally {
+        signInButton.disabled = false;
+        signInButton.textContent = "Sign In Securely →";
+    }
+});
+
+// REGISTRATION
+registerForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearMessage();
+
+    const username =
+        document.getElementById("registerUsername").value.trim();
+    const password =
+        document.getElementById("registerPassword").value;
+    const confirmPassword =
+        document.getElementById("confirmPassword").value;
+
+    if (!username) {
+        showMessage("Please enter a username.", "error");
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        showMessage("Passwords do not match.", "error");
+        return;
+    }
+
+    registerButton.disabled = true;
+    registerButton.textContent = "Creating account…";
+
+    try {
+        const response = await fetch("/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            showMessage(describeError(data, response.status), "error");
+            return;
+        }
+
+        // Adapt to the existing create_user response.
+        if (data && typeof data === "object"
+            && data.status && data.status !== "success") {
+            showMessage(describeError(data, response.status), "error");
+            return;
+        }
+
+        registerForm.reset();
+        switchForm("login");
+        usernameInput.value = username;
+        passwordInput.value = "";
+
+        showMessage(
+            data.message || "Account created. You can now sign in.",
+            "success"
+        );
+
+    } catch (error) {
+        showMessage(
+            "Could not connect to AutoSecCloud. Check that the backend is running.",
+            "error"
+        );
+    } finally {
+        registerButton.disabled = false;
+        registerButton.textContent = "Create Account →";
+    }
+});
+
+// TEST THE PROTECTED ENDPOINT
+continueLink.addEventListener("click", async (event) => {
+    event.preventDefault();
+
+    if (!accessToken) {
+        showMessage("Please sign in first.", "error");
+        return;
+    }
+
+    continueLink.textContent = "Checking access…";
+
+    try {
+        const response = await fetch("/protected", {
+            headers: { "Authorization": "Bearer " + accessToken }
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            showMessage(
+                "Login succeeded, but protected API access failed (HTTP "
+                + response.status + ").",
+                "error"
+            );
+            return;
+        }
+
+        const user = data.user;
+        const identity = user && typeof user === "object"
+            ? (user.sub || user.username || "verified")
+            : (user || "verified");
+
+        showMessage(
+            "Protected API access verified. Authenticated user: "
+            + String(identity) + ".",
+            "success"
+        );
+
+    } catch (error) {
+        showMessage("Could not reach the protected endpoint.", "error");
+    } finally {
+        continueLink.textContent = "Continue to protected API →";
+    }
+});
+</script>
+</body>
+</html>

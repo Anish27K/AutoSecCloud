@@ -3,6 +3,8 @@ from fastapi import FastAPI, Depends
 from backend.routes.auth_routes import router as auth_router
 from backend.routes.admin_routes import router as admin_router
 
+from fastapi.responses import FileResponse
+from pathlib import Path
 
 import time
 from backend.services.security_service import blocked_ips, BLOCK_DURATION
@@ -50,6 +52,20 @@ def home():
     return {
         "message": "AutoSecCloud running successfully"
     }
+
+# =========================
+# LOGIN UI
+# =========================
+
+LOGIN_PAGE = (
+    Path(__file__).resolve().parent
+    / "static"
+    / "login.html"
+)
+
+@app.get("/login", include_in_schema=False)
+def login_page():
+    return FileResponse(LOGIN_PAGE, media_type="text/html")
 
 # =========================
 # PROTECTED ROUTE
